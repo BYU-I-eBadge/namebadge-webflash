@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Namebadge Bootloader Flash Site</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      background: #f7f9fa;
+      color: #222;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 1.5em 2em 1em 2em;
+      margin-bottom: 2em;
+      box-shadow: 0 2px 8px 0 #0001;
+    }
+    .header img {
+      height: 48px;
+      margin-right: 1.5em;
+    }
+    .container {
+      max-width: 480px;
+      margin: 2em auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px 0 #0002;
+      padding: 2em 2.5em 2.5em 2.5em;
+    }
+    h1 {
+      font-size: 1.7em;
+      margin: 0 0 0.5em 0;
+      font-weight: 600;
+    }
+    #status {
+      margin: 1em 0 1.5em 0;
+      color: #333;
+      font-size: 1.05em;
+    }
+    label {
+      font-weight: 500;
+      margin-right: 0.5em;
+    }
+    select, button {
+      font-size: 1em;
+      padding: 0.5em 1em;
+      margin-right: 0.5em;
+      border-radius: 5px;
+      border: 1px solid #bbb;
+      background: #f8fafc;
+      transition: border 0.2s;
+    }
+    button {
+      background: #0b4d92;
+      color: #fff;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 4px 0 #0001;
+    }
+    button:disabled {
+      background: #b0b8c0;
+      cursor: not-allowed;
+    }
+    .footer {
+      text-align: center;
+      color: #888;
+      font-size: 0.95em;
+      margin-top: 3em;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="byui-cstem-logo.png" alt="BYU-Idaho CSTEM logo" />
+    <div>
+      <h1>Namebadge Web Flash</h1>
+      <div style="font-size:1.1em; color:#0b4d92; font-weight:500;">Department of Computer Science &amp; Engineering</div>
+    </div>
+  </div>
+  <div id="mainContent">
+    <div class="container">
+      <h2 style="margin-top:0">How to Flash Your Namebadge</h2>
+      <!-- Browser note removed for success screen -->
+      <ol style="margin-bottom:1.5em;">
+        <li>Connect your badge to your computer using a USB-C cable (see below).</li>
+        <li>Hold the <b>BOOT</b> button, then press and release the <b>RESET</b> button.</li>
+        <li>Release the <b>BOOT</b> button after a second.</li>
+        <li>Select the desired bootloader version below and click <b>Flash Version</b>.</li>
+        <li>Follow on-screen instructions. (Use a Chromium-based browser.)</li>
+      </ol>
+      <img src="namebadge-board-buttons.png" alt="Namebadge board with BOOT and RESET buttons indicated" style="width:100%;max-width:600px;display:block;margin:0 auto 1.5em auto;border-radius:8px;box-shadow:0 2px 8px #0002;">
+      <div style="display: flex; gap: 2em; margin-top: 2em; justify-content: center;">
+        <div style="flex:1; min-width: 220px; background: #f8fafc; border-radius: 8px; box-shadow: 0 1px 4px #0001; padding: 1.5em;">
+          <h3 style="margin-top:0">Bootloader Flash</h3>
+          <div style="font-size:1.05em; margin-bottom:1em;">A bootloader is like a small operating system for your board. This will let you customize your board, connect your board to the internet, and download and run programs and write your own code.</div>
+          <label for="bootloaderSelect">Bootloader Version:</label>
+          <select id="bootloaderSelect" disabled></select>
+          <button id="flashBtn" disabled>Flash Version</button>
+        </div>
+        <div style="flex:1; min-width: 220px; background: #f8fafc; border-radius: 8px; box-shadow: 0 1px 4px #0001; padding: 1.5em;">
+          <h3 style="margin-top:0">Single Program Flash</h3>
+          <div style="font-size:1.05em; margin-bottom:1em;">This option lets you flash a specific, single program to run.</div>
+          <label for="programSelect">Program:</label>
+          <select id="programSelect" disabled></select>
+          <button id="programFlashBtn" disabled>Flash Program</button>
+        </div>
+      </div>
+      <div id="status" style="margin-top:2em;">Loading manifest...</div>
+    </div>
+    <div class="footer">
+      &copy; 2026 BYU-Idaho CSTEM. For classroom and educational use.
+    </div>
+  </div>
+  <div id="unsupportedMsg" style="display:none;max-width:520px;margin:4em auto 0 auto;padding:2em 2.5em;background:#fff3f3;border:2px solid #e44;box-shadow:0 2px 16px #0002;border-radius:12px;text-align:center;font-size:1.2em;color:#a00;">
+    <b id="browserNameMsg">This browser is not supported for flashing your Namebadge.</b><br><br>
+    Please use one of the following browsers:<br>
+    <b>Edge, Chrome, or Chromium</b> (desktop version, not mobile).<br><br>
+    <span style="font-size:0.95em;color:#444;">(Firefox, Safari, Brave, and Opera are not supported due to missing Web Serial API support.)</span>
+  </div>
+  <script src="webflash.js"></script>
+</body>
+</html>
