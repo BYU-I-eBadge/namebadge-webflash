@@ -122,19 +122,25 @@ async function performFlash(binary, label) {
   };
 
   let transport = null;
+  let resetPromptTimer = null;
   try {
     statusDiv.textContent = 'Select the serial port for your badge...';
     const port = await navigator.serial.requestPort();
     transport = new Transport(port, false);
 
-    // Show the reset-prompt banner so the user knows to enter download mode now
-    resetPrompt.style.display = '';
-    statusDiv.textContent = 'Waiting for badge to enter download mode...';
-
     const esploader = new ESPLoader({ transport, baudrate: 115200, terminal });
 
     statusDiv.textContent = 'Connecting to chip...';
+
+    // If sync takes more than 2 s, prompt the user to enter download mode
+    resetPromptTimer = setTimeout(() => {
+      resetPrompt.style.display = '';
+      statusDiv.textContent = 'Waiting for badge to enter download mode...';
+    }, 2000);
+
     const chipName = await esploader.main();
+    clearTimeout(resetPromptTimer);
+    resetPrompt.style.display = 'none';
     statusDiv.textContent = `Connected to ${chipName}. Starting flash...`;
 
     // Clear otadata so the device boots the newly flashed factory image immediately,
@@ -166,6 +172,7 @@ async function performFlash(binary, label) {
     setTimeout(hideProgress, 3000);
   } catch (e) {
     hideProgress();
+    clearTimeout(resetPromptTimer);
     resetPrompt.style.display = 'none';
     throw e;
   } finally {
