@@ -113,10 +113,10 @@
       <!-- Browser note removed for success screen -->
       <ol style="margin-bottom:1.5em;">
         <li>Connect your badge to your computer using a USB-C cable (see below).</li>
-        <li>Hold the <b>BOOT</b> button, then press and release the <b>RESET</b> button.</li>
-        <li>Release the <b>BOOT</b> button after a second.</li>
-        <li>Select the desired bootloader version below and click <b>Flash Version</b>.</li>
-        <li>Follow on-screen instructions. (Use a Chromium-based browser.)</li>
+        <li>Select a flash option below and click the Flash button.</li>
+        <li>Choose <b>CP2102N USB to UART Bridge Controller</b> from the port picker and click <b>Connect</b>.</li>
+        <li>When prompted, hold <b>BOOT</b>, press and release <b>RESET</b>, then release <b>BOOT</b>.</li>
+        <li>Flashing starts automatically — wait for the progress bar to finish.</li>
       </ol>
       <img src="namebadge-board-buttons.png" alt="Namebadge board with BOOT and RESET buttons indicated" style="width:100%;max-width:600px;display:block;margin:0 auto 1.5em auto;border-radius:8px;box-shadow:0 2px 8px #0002;">
       <div style="display: flex; gap: 2em; margin-top: 2em; justify-content: center;">
@@ -136,6 +136,10 @@
         </div>
       </div>
       <div id="status" style="margin-top:2em;">Loading manifest...</div>
+      <div id="resetPrompt" style="display:none;margin-top:1em;padding:1em 1.2em;background:#fff8e1;border:2px solid #f9a825;border-radius:8px;font-size:1.05em;">
+        <b>Now enter download mode on your badge:</b><br>
+        Hold <b>BOOT</b> &rarr; press &amp; release <b>RESET</b> &rarr; release <b>BOOT</b>
+      </div>
       <div id="progressWrap">
         <div id="progressBar"><div id="progressFill"></div></div>
         <div id="progressLabel"></div>

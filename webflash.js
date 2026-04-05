@@ -32,6 +32,7 @@ const statusDiv      = document.getElementById('status');
 const progressWrap   = document.getElementById('progressWrap');
 const progressFill   = document.getElementById('progressFill');
 const progressLabel  = document.getElementById('progressLabel');
+const resetPrompt    = document.getElementById('resetPrompt');
 const bootloaderSelect = document.getElementById('bootloaderSelect');
 const flashBtn       = document.getElementById('flashBtn');
 const programSelect  = document.getElementById('programSelect');
@@ -126,7 +127,11 @@ async function performFlash(binary, label) {
     const port = await navigator.serial.requestPort();
     transport = new Transport(port, false);
 
-    const esploader = new ESPLoader({ transport, baudrate: 460800, terminal });
+    // Show the reset-prompt banner so the user knows to enter download mode now
+    resetPrompt.style.display = '';
+    statusDiv.textContent = 'Waiting for badge to enter download mode...';
+
+    const esploader = new ESPLoader({ transport, baudrate: 115200, terminal });
 
     statusDiv.textContent = 'Connecting to chip...';
     const chipName = await esploader.main();
@@ -154,12 +159,14 @@ async function performFlash(binary, label) {
     });
 
     setProgress(100, 'Done!');
+    resetPrompt.style.display = 'none';
     statusDiv.textContent = 'Flashing done. Resetting device...';
     await esploader.after('hard_reset');
     statusDiv.textContent = `${label} flashed successfully!`;
     setTimeout(hideProgress, 3000);
   } catch (e) {
     hideProgress();
+    resetPrompt.style.display = 'none';
     throw e;
   } finally {
     if (transport) {
