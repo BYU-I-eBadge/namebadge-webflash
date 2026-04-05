@@ -10,9 +10,17 @@ window.__NB_WEBFLASH_LOADED__ = true;
 const manifestUrl = 'https://raw.githubusercontent.com/watsonlr/namebadge-apps/main/bootloader_downloads/loader_manifest.json';
 const programManifestUrl = 'https://raw.githubusercontent.com/watsonlr/namebadge-apps/main/manifest.json';
 
-// Both the badge bootloader OS and bare-metal apps flash to the factory app partition
-const BOOTLOADER_FLASH_ADDR = 0x20000;
-const APP_FLASH_ADDR = 0x20000;
+// Flash layout (from partitions.csv):
+//   0x1000  second-stage bootloader (factory_switch hook)
+//   0x8000  partition table
+//   0xF000  otadata  – OTA boot selector, 2 × 4 KB sectors
+//   0x20000 factory  – badge loader OS or bare-metal app (1.25 MB)
+//   0x160000 ota_0   – student app slot A
+//   0x2A0000 ota_1   – student app slot B
+//   0x3E0000 user_data – WiFi config / badge nickname (never touched here)
+const FACTORY_ADDR   = 0x20000;
+const OTADATA_ADDR   = 0xF000;
+const OTADATA_SIZE   = 0x2000; // 8 KB (2 × 4 KB sectors)
 
 let bootloaderList = [];
 let bootloaderBinary = null;
@@ -90,7 +98,7 @@ function getBrowserName() {
 }
 
 
-async function performFlash(binary, address, label) {
+async function performFlash(binary, label) {
   const terminal = {
     clean() {},
     writeLine(data) { statusDiv.textContent = data; console.log('[ESP]', data); },
@@ -109,8 +117,15 @@ async function performFlash(binary, address, label) {
     const chipName = await esploader.main();
     statusDiv.textContent = `Connected to ${chipName}. Starting flash...`;
 
+    // Clear otadata so the device boots the newly flashed factory image immediately,
+    // rather than resuming a previously installed OTA student app.
+    const blankOtadata = new Uint8Array(OTADATA_SIZE).fill(0xFF);
+
     await esploader.writeFlash({
-      fileArray: [{ data: new Uint8Array(binary), address }],
+      fileArray: [
+        { data: new Uint8Array(binary), address: FACTORY_ADDR },
+        { data: blankOtadata,           address: OTADATA_ADDR },
+      ],
       flashMode: 'keep',
       flashFreq: 'keep',
       flashSize: 'keep',
@@ -210,7 +225,7 @@ programFlashBtn?.addEventListener('click', async () => {
   programFlashBtn.disabled = true;
   flashBtn.disabled = true;
   try {
-    await performFlash(programBinary, APP_FLASH_ADDR, label);
+    await performFlash(programBinary, label);
   } catch (e) {
     statusDiv.textContent = 'Flash error: ' + (e.message || e);
     console.error('[Flash error]', e);
@@ -306,7 +321,7 @@ flashBtn.addEventListener('click', async () => {
   flashBtn.disabled = true;
   programFlashBtn.disabled = true;
   try {
-    await performFlash(bootloaderBinary, BOOTLOADER_FLASH_ADDR, label);
+    await performFlash(bootloaderBinary, label);
   } catch (e) {
     statusDiv.textContent = 'Flash error: ' + (e.message || e);
     console.error('[Flash error]', e);
