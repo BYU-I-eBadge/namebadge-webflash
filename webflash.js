@@ -10,8 +10,8 @@ window.__NB_WEBFLASH_LOADED__ = true;
 const manifestUrl = 'https://raw.githubusercontent.com/watsonlr/namebadge-apps/main/bootloader_downloads/loader_manifest.json';
 const programManifestUrl = 'https://raw.githubusercontent.com/watsonlr/namebadge-apps/main/manifest.json';
 
-// ESP32-S3: second-stage bootloader at 0x0, factory app partition at 0x20000
-const BOOTLOADER_FLASH_ADDR = 0x0;
+// Both the badge bootloader OS and bare-metal apps flash to the factory app partition
+const BOOTLOADER_FLASH_ADDR = 0x20000;
 const APP_FLASH_ADDR = 0x20000;
 
 let bootloaderList = [];
