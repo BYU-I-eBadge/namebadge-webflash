@@ -1,3 +1,5 @@
+import { ESPLoader, Transport } from "https://unpkg.com/esptool-js/bundle.js";
+
 if (window.__NB_WEBFLASH_LOADED__) {
   console.log('[DEBUG] webflash.js loaded more than once!');
   throw new Error('webflash.js loaded more than once!');
@@ -7,6 +9,11 @@ window.__NB_WEBFLASH_LOADED__ = true;
 
 const manifestUrl = 'https://raw.githubusercontent.com/watsonlr/namebadge-apps/main/bootloader_downloads/loader_manifest.json';
 const programManifestUrl = 'https://raw.githubusercontent.com/watsonlr/namebadge-apps/main/manifest.json';
+
+// ESP32-S3: second-stage bootloader at 0x0, factory app partition at 0x20000
+const BOOTLOADER_FLASH_ADDR = 0x0;
+const APP_FLASH_ADDR = 0x20000;
+
 let bootloaderList = [];
 let bootloaderBinary = null;
 let programList = [];
@@ -24,29 +31,24 @@ const browserNameMsg = document.getElementById('browserNameMsg');
 
 
 function isSupportedBrowser() {
-  // Must have Web Serial API
   if (!('serial' in navigator)) {
     console.log('[DEBUG] Web Serial API not found in navigator.');
     return false;
   }
   const ua = navigator.userAgent;
   console.log('[DEBUG] User agent:', ua);
-  // Detect Brave using navigator.brave if available
   if (navigator.brave && typeof navigator.brave.isBrave === 'function') {
     console.log('[DEBUG] Detected Brave browser.');
     return false;
   }
-  // Exclude Firefox
   if (ua.includes('Firefox')) {
     console.log('[DEBUG] Detected Firefox.');
     return false;
   }
-  // Exclude Opera
   if (ua.includes('OPR/') || ua.includes('Opera')) {
     console.log('[DEBUG] Detected Opera.');
     return false;
   }
-  // Accept Edge, Chrome, Chromium (Edge must be checked before Chrome)
   if (ua.includes('Edg/')) {
     console.log('[DEBUG] Detected Edge.');
     return true;
@@ -59,7 +61,6 @@ function isSupportedBrowser() {
     console.log('[DEBUG] Detected Chromium.');
     return true;
   }
-  // Exclude Safari ONLY if not Chrome, Edge, Chromium, Opera, or Brave
   if (
     ua.includes('Safari') &&
     !ua.includes('Chrome') &&
@@ -88,6 +89,50 @@ function getBrowserName() {
   return 'Unknown';
 }
 
+
+async function performFlash(binary, address, label) {
+  const terminal = {
+    clean() {},
+    writeLine(data) { statusDiv.textContent = data; console.log('[ESP]', data); },
+    write(data) { statusDiv.textContent = data; },
+  };
+
+  let transport = null;
+  try {
+    statusDiv.textContent = 'Select the serial port for your badge...';
+    const port = await navigator.serial.requestPort();
+    transport = new Transport(port, false);
+
+    const esploader = new ESPLoader({ transport, baudrate: 460800, terminal });
+
+    statusDiv.textContent = 'Connecting to chip...';
+    const chipName = await esploader.main();
+    statusDiv.textContent = `Connected to ${chipName}. Starting flash...`;
+
+    await esploader.writeFlash({
+      fileArray: [{ data: new Uint8Array(binary), address }],
+      flashMode: 'keep',
+      flashFreq: 'keep',
+      flashSize: 'keep',
+      eraseAll: false,
+      compress: true,
+      reportProgress: (_idx, written, total) => {
+        const pct = Math.round((written / total) * 100);
+        statusDiv.textContent = `Flashing ${label}: ${pct}% (${written} / ${total} bytes)`;
+      },
+    });
+
+    statusDiv.textContent = 'Flashing done. Resetting device...';
+    await esploader.after('hard_reset');
+    statusDiv.textContent = `${label} flashed successfully! Device is resetting.`;
+  } finally {
+    if (transport) {
+      try { await transport.disconnect(); } catch (_) {}
+    }
+  }
+}
+
+
 async function fetchProgramManifest() {
   if (!programSelect) return;
   programSelect.innerHTML = '<option>Loading...</option>';
@@ -96,15 +141,22 @@ async function fetchProgramManifest() {
   try {
     const resp = await fetch(programManifestUrl);
     if (!resp.ok) throw new Error('Failed to fetch program manifest');
-    let manifest = await resp.json();
-    if (manifest && Array.isArray(manifest.apps)) {
+    const manifest = await resp.json();
+    if (Array.isArray(manifest)) {
+      programList = manifest;
+    } else if (manifest && Array.isArray(manifest.apps)) {
       programList = manifest.apps;
     } else {
       programList = [];
     }
     populateProgramDropdown();
     programSelect.disabled = false;
-    programFlashBtn.disabled = false;
+    // Pre-load first program
+    if (programList.length > 0 && programList[0].url) {
+      await fetchProgramBinary(programList[0].url);
+    } else {
+      programFlashBtn.disabled = false;
+    }
   } catch (e) {
     programSelect.innerHTML = '<option>Error loading programs</option>';
     programSelect.disabled = true;
@@ -118,7 +170,7 @@ function populateProgramDropdown() {
   programList.forEach((entry, idx) => {
     const opt = document.createElement('option');
     opt.value = idx;
-    opt.textContent = entry.name || entry.title || entry.binary_url || `Program ${idx+1}`;
+    opt.textContent = entry.name || entry.title || entry.url || `Program ${idx + 1}`;
     if (idx === 0) opt.selected = true;
     programSelect.appendChild(opt);
   });
@@ -126,6 +178,7 @@ function populateProgramDropdown() {
 
 async function fetchProgramBinary(url) {
   statusDiv.textContent = 'Downloading program binary...';
+  programFlashBtn.disabled = true;
   try {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('Failed to fetch program binary');
@@ -139,12 +192,11 @@ async function fetchProgramBinary(url) {
   }
 }
 
-programSelect?.addEventListener('change', async (e) => {
+programSelect?.addEventListener('change', async () => {
   const idx = parseInt(programSelect.value, 10);
   const entry = programList[idx];
-  programFlashBtn.disabled = true;
-  if (entry && entry.binary_url) {
-    await fetchProgramBinary(entry.binary_url);
+  if (entry && entry.url) {
+    await fetchProgramBinary(entry.url);
   }
 });
 
@@ -153,27 +205,24 @@ programFlashBtn?.addEventListener('click', async () => {
     statusDiv.textContent = 'Program not loaded. Select a program above.';
     return;
   }
-  if (!('serial' in navigator)) {
-    statusDiv.textContent = 'Web Serial API not supported in this browser.';
-    return;
-  }
+  const idx = parseInt(programSelect.value, 10);
+  const label = programList[idx]?.name || 'Program';
+  programFlashBtn.disabled = true;
+  flashBtn.disabled = true;
   try {
-    statusDiv.textContent = 'Requesting serial port...';
-    const port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 115200 });
-    statusDiv.textContent = 'Serial port opened. (Flashing not implemented yet)';
-    // For now, just print to console
-    console.log('Program binary ready to flash:', programBinary);
-    await port.close();
-    statusDiv.textContent = 'Serial port closed.';
+    await performFlash(programBinary, APP_FLASH_ADDR, label);
   } catch (e) {
-    statusDiv.textContent = 'Serial error: ' + e;
+    statusDiv.textContent = 'Flash error: ' + (e.message || e);
+    console.error('[Flash error]', e);
+  } finally {
+    programFlashBtn.disabled = false;
+    flashBtn.disabled = false;
   }
 });
 
+
 function showBrowserStatus() {
   console.log('[DEBUG] showBrowserStatus() called');
-  console.trace('[DEBUG] showBrowserStatus stack trace');
   const browserName = getBrowserName();
   if (isSupportedBrowser()) {
     console.log('[DEBUG] showBrowserStatus: supported browser, showing mainContent');
@@ -200,20 +249,17 @@ async function fetchManifest() {
     const resp = await fetch(manifestUrl);
     if (!resp.ok) throw new Error('Failed to fetch manifest');
     let manifest = await resp.json();
-    // Reverse order: latest first
     manifest = manifest.slice().reverse();
     bootloaderList = manifest;
     populateBootloaderDropdown();
     bootloaderSelect.disabled = false;
     flashBtn.disabled = false;
-    // Preload the latest
     await fetchBootloaderBinary(bootloaderList[0].binary_url);
   } catch (e) {
     console.log('[DEBUG] Error in fetchManifest:', e);
     statusDiv.textContent = 'Error fetching manifest: ' + e;
     bootloaderSelect.disabled = true;
     flashBtn.disabled = true;
-    // Do NOT hide mainContent or show unsupportedMsg here!
   }
 }
 
@@ -223,13 +269,14 @@ function populateBootloaderDropdown() {
     const opt = document.createElement('option');
     opt.value = idx;
     opt.textContent = `${entry.loader_version}`;
-    if (idx === 0) opt.selected = true; // highlight most recent
+    if (idx === 0) opt.selected = true;
     bootloaderSelect.appendChild(opt);
   });
 }
 
 async function fetchBootloaderBinary(url) {
   statusDiv.textContent = 'Downloading bootloader binary...';
+  flashBtn.disabled = true;
   try {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('Failed to fetch bootloader binary');
@@ -243,10 +290,9 @@ async function fetchBootloaderBinary(url) {
   }
 }
 
-bootloaderSelect.addEventListener('change', async (e) => {
+bootloaderSelect.addEventListener('change', async () => {
   const idx = parseInt(bootloaderSelect.value, 10);
   const entry = bootloaderList[idx];
-  flashBtn.disabled = true;
   await fetchBootloaderBinary(entry.binary_url);
 });
 
@@ -255,21 +301,18 @@ flashBtn.addEventListener('click', async () => {
     statusDiv.textContent = 'Bootloader not loaded. Select a version above.';
     return;
   }
-  if (!('serial' in navigator)) {
-    statusDiv.textContent = 'Web Serial API not supported in this browser.';
-    return;
-  }
+  const idx = parseInt(bootloaderSelect.value, 10);
+  const label = `Bootloader v${bootloaderList[idx]?.loader_version ?? ''}`;
+  flashBtn.disabled = true;
+  programFlashBtn.disabled = true;
   try {
-    statusDiv.textContent = 'Requesting serial port...';
-    const port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 115200 });
-    statusDiv.textContent = 'Serial port opened. (Flashing not implemented yet)';
-    // For now, just print to console
-    console.log('Bootloader binary ready to flash:', bootloaderBinary);
-    await port.close();
-    statusDiv.textContent = 'Serial port closed.';
+    await performFlash(bootloaderBinary, BOOTLOADER_FLASH_ADDR, label);
   } catch (e) {
-    statusDiv.textContent = 'Serial error: ' + e;
+    statusDiv.textContent = 'Flash error: ' + (e.message || e);
+    console.error('[Flash error]', e);
+  } finally {
+    flashBtn.disabled = false;
+    programFlashBtn.disabled = false;
   }
 });
 
