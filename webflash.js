@@ -28,14 +28,29 @@ let programList = [];
 let programBinary = null;
 
 
-const statusDiv = document.getElementById('status');
+const statusDiv      = document.getElementById('status');
+const progressWrap   = document.getElementById('progressWrap');
+const progressFill   = document.getElementById('progressFill');
+const progressLabel  = document.getElementById('progressLabel');
 const bootloaderSelect = document.getElementById('bootloaderSelect');
-const flashBtn = document.getElementById('flashBtn');
-const programSelect = document.getElementById('programSelect');
+const flashBtn       = document.getElementById('flashBtn');
+const programSelect  = document.getElementById('programSelect');
 const programFlashBtn = document.getElementById('programFlashBtn');
-const mainContent = document.getElementById('mainContent');
+const mainContent    = document.getElementById('mainContent');
 const unsupportedMsg = document.getElementById('unsupportedMsg');
 const browserNameMsg = document.getElementById('browserNameMsg');
+
+function setProgress(pct, label) {
+  progressWrap.style.display = '';
+  progressFill.style.width = pct + '%';
+  progressLabel.textContent = label;
+}
+
+function hideProgress() {
+  progressWrap.style.display = 'none';
+  progressFill.style.width = '0%';
+  progressLabel.textContent = '';
+}
 
 
 function isSupportedBrowser() {
@@ -121,6 +136,7 @@ async function performFlash(binary, label) {
     // rather than resuming a previously installed OTA student app.
     const blankOtadata = new Uint8Array(OTADATA_SIZE).fill(0xFF);
 
+    setProgress(0, 'Starting...');
     await esploader.writeFlash({
       fileArray: [
         { data: new Uint8Array(binary), address: FACTORY_ADDR },
@@ -133,13 +149,18 @@ async function performFlash(binary, label) {
       compress: true,
       reportProgress: (_idx, written, total) => {
         const pct = Math.round((written / total) * 100);
-        statusDiv.textContent = `Flashing ${label}: ${pct}% (${written} / ${total} bytes)`;
+        setProgress(pct, `${pct}%  —  ${written.toLocaleString()} / ${total.toLocaleString()} bytes`);
       },
     });
 
+    setProgress(100, 'Done!');
     statusDiv.textContent = 'Flashing done. Resetting device...';
     await esploader.after('hard_reset');
-    statusDiv.textContent = `${label} flashed successfully! Device is resetting.`;
+    statusDiv.textContent = `${label} flashed successfully!`;
+    setTimeout(hideProgress, 3000);
+  } catch (e) {
+    hideProgress();
+    throw e;
   } finally {
     if (transport) {
       try { await transport.disconnect(); } catch (_) {}
