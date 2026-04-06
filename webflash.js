@@ -160,7 +160,10 @@ async function performFlash(binary, label) {
       compress: true,
       reportProgress: (_idx, written, total) => {
         const pct = Math.round((written / total) * 100);
-        setProgress(pct, `${pct}%  —  ${written.toLocaleString()} / ${total.toLocaleString()} bytes`);
+        const filled = Math.round(pct / 5);  // 20 chars wide
+        const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
+        statusDiv.textContent = `[${bar}] ${pct}%`;
+        setProgress(pct, `${written.toLocaleString()} / ${total.toLocaleString()} bytes`);
       },
     });
 
