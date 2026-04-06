@@ -160,8 +160,10 @@ async function performFlash(binary, label) {
       flashSize: 'keep',
       eraseAll: false,
       compress: true,
-      reportProgress: (_idx, written, total) => {
-        const pct = Math.round((written / total) * 100);
+      reportProgress: (fileIndex, written, total) => {
+        console.log('[PROGRESS]', fileIndex, written, total);
+        if (!total || fileIndex > 0) return; // only track the main binary (index 0)
+        const pct = Math.min(100, Math.round((written / total) * 100));
         const filled = Math.round(pct / 5);  // 20 chars wide
         const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
         statusDiv.textContent = `[${bar}] ${pct}%`;
