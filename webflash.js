@@ -18,9 +18,11 @@ const programManifestUrl = 'https://byu-i-ebadge.github.io/apps/manifest.json';
 //   0x160000 ota_0   – student app slot A
 //   0x2A0000 ota_1   – student app slot B
 //   0x3E0000 user_data – WiFi config / badge nickname (never touched here)
-const FACTORY_ADDR   = 0x20000;
-const OTADATA_ADDR   = 0xF000;
-const OTADATA_SIZE   = 0x2000; // 8 KB (2 × 4 KB sectors)
+const FACTORY_ADDR    = 0x20000;
+const OTADATA_ADDR    = 0xF000;
+const OTADATA_SIZE    = 0x2000;   // 8 KB (2 × 4 KB sectors)
+const USER_DATA_ADDR  = 0x3E0000;
+const USER_DATA_SIZE  = 0x20000;  // 128 KB (4 MB flash end − 0x3E0000)
 
 let bootloaderList = [];
 let bootloaderBinary = null;
@@ -28,6 +30,7 @@ let programList = [];
 let programBinary = null;
 
 
+const keepUserDataCheckbox = document.getElementById('keepUserData');
 const statusDiv      = document.getElementById('status');
 const progressWrap   = document.getElementById('progressWrap');
 const progressFill   = document.getElementById('progressFill');
@@ -114,7 +117,7 @@ function getBrowserName() {
 }
 
 
-async function performFlash(binary, label) {
+async function performFlash(binary, label, { eraseUserData = false } = {}) {
   let flashing = false;
   const terminal = {
     clean() {},
@@ -146,15 +149,21 @@ async function performFlash(binary, label) {
 
     // Clear otadata so the device boots the newly flashed factory image immediately,
     // rather than resuming a previously installed OTA student app.
-    const blankOtadata = new Uint8Array(OTADATA_SIZE).fill(0xFF);
+    const blankOtadata   = new Uint8Array(OTADATA_SIZE).fill(0xFF);
+    const blankUserData  = new Uint8Array(USER_DATA_SIZE).fill(0xFF);
+
+    const fileArray = [
+      { data: new Uint8Array(binary), address: FACTORY_ADDR },
+      { data: blankOtadata,           address: OTADATA_ADDR },
+    ];
+    if (eraseUserData) {
+      fileArray.push({ data: blankUserData, address: USER_DATA_ADDR });
+    }
 
     flashing = true;
     setProgress(0, 'Starting...');
     await esploader.writeFlash({
-      fileArray: [
-        { data: new Uint8Array(binary), address: FACTORY_ADDR },
-        { data: blankOtadata,           address: OTADATA_ADDR },
-      ],
+      fileArray,
       flashMode: 'keep',
       flashFreq: 'keep',
       flashSize: 'keep',
@@ -362,7 +371,7 @@ flashBtn.addEventListener('click', async () => {
   flashBtn.disabled = true;
   programFlashBtn.disabled = true;
   try {
-    await performFlash(bootloaderBinary, label);
+    await performFlash(bootloaderBinary, label, { eraseUserData: !keepUserDataCheckbox.checked });
   } catch (e) {
     statusDiv.textContent = 'Flash error: ' + (e.message || e);
     console.error('[Flash error]', e);
