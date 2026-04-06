@@ -7,8 +7,8 @@ if (window.__NB_WEBFLASH_LOADED__) {
 window.__NB_WEBFLASH_LOADED__ = true;
 
 
-const manifestUrl = 'https://raw.githubusercontent.com/watsonlr/namebadge-apps/main/bootloader_downloads/loader_manifest.json';
-const programManifestUrl = 'https://raw.githubusercontent.com/watsonlr/namebadge-apps/main/manifest.json';
+const manifestUrl = 'https://byu-i-ebadge.github.io/apps/loader_manifest.json';
+const programManifestUrl = 'https://byu-i-ebadge.github.io/apps/manifest.json';
 
 // Flash layout (from partitions.csv):
 //   0x1000  second-stage bootloader (factory_switch hook)
