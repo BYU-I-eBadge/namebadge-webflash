@@ -129,7 +129,7 @@ async function performFlash(binary, label) {
     const port = await navigator.serial.requestPort();
     transport = new Transport(port, false);
 
-    const esploader = new ESPLoader({ transport, baudrate: 115200, terminal });
+    const esploader = new ESPLoader({ transport, baudrate: 460800, terminal });
 
     statusDiv.textContent = 'Connecting to chip...';
 
