@@ -201,12 +201,7 @@ async function fetchProgramManifest() {
     }
     populateProgramDropdown();
     programSelect.disabled = false;
-    // Pre-load first program
-    if (programList.length > 0 && programList[0].url) {
-      await fetchProgramBinary(programList[0].url);
-    } else {
-      programFlashBtn.disabled = false;
-    }
+    programFlashBtn.disabled = false;
   } catch (e) {
     programSelect.innerHTML = '<option>Error loading programs</option>';
     programSelect.disabled = true;
@@ -251,15 +246,19 @@ programSelect?.addEventListener('change', async () => {
 });
 
 programFlashBtn?.addEventListener('click', async () => {
-  if (!programBinary) {
-    statusDiv.textContent = 'Program not loaded. Select a program above.';
-    return;
-  }
   const idx = parseInt(programSelect.value, 10);
-  const label = programList[idx]?.name || 'Program';
+  const entry = programList[idx];
+  const label = entry?.name || 'Program';
   programFlashBtn.disabled = true;
   flashBtn.disabled = true;
   try {
+    if (!programBinary && entry?.url) {
+      await fetchProgramBinary(entry.url);
+    }
+    if (!programBinary) {
+      statusDiv.textContent = 'Failed to load program binary.';
+      return;
+    }
     await performFlash(programBinary, label);
   } catch (e) {
     statusDiv.textContent = 'Flash error: ' + (e.message || e);
