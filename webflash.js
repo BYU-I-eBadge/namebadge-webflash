@@ -115,10 +115,11 @@ function getBrowserName() {
 
 
 async function performFlash(binary, label) {
+  let flashing = false;
   const terminal = {
     clean() {},
-    writeLine(data) { statusDiv.textContent = data; console.log('[ESP]', data); },
-    write(data) { statusDiv.textContent = data; },
+    writeLine(data) { if (!flashing) statusDiv.textContent = data; console.log('[ESP]', data); },
+    write(data)     { if (!flashing) statusDiv.textContent = data; },
   };
 
   let transport = null;
@@ -147,6 +148,7 @@ async function performFlash(binary, label) {
     // rather than resuming a previously installed OTA student app.
     const blankOtadata = new Uint8Array(OTADATA_SIZE).fill(0xFF);
 
+    flashing = true;
     setProgress(0, 'Starting...');
     await esploader.writeFlash({
       fileArray: [
