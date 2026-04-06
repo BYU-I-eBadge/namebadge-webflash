@@ -132,11 +132,11 @@ async function performFlash(binary, label) {
 
     statusDiv.textContent = 'Connecting to chip...';
 
-    // If sync takes more than 2 s, prompt the user to enter download mode
+    // If sync takes more than 8 s, prompt the user to enter download mode
     resetPromptTimer = setTimeout(() => {
       resetPrompt.style.display = '';
       statusDiv.textContent = 'Waiting for badge to enter download mode...';
-    }, 2000);
+    }, 8000);
 
     const chipName = await esploader.main();
     clearTimeout(resetPromptTimer);
