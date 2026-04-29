@@ -212,7 +212,7 @@ async function fetchEntriesBinaries(manifestEntry, label) {
 // fileEntries:  [{binary: ArrayBuffer, address: number}, ...]
 // clearOtadata: true for badge OS flash — clears OTA selector so factory boots
 //               false for bare-metal programs — they have their own partition table
-async function performFlash(fileEntries, label, { eraseUserData = false, clearOtadata = false } = {}) {
+async function performFlash(fileEntries, label, { eraseUserData = false, clearOtadata = false, successMessage = null } = {}) {
   hideTroubleshoot();
   let flashing = false;
   const terminal = {
@@ -278,7 +278,8 @@ async function performFlash(fileEntries, label, { eraseUserData = false, clearOt
     resetPrompt.style.display = 'none';
     statusDiv.textContent = 'Flashing done. Resetting device...';
     await esploader.after('hard_reset');
-    statusDiv.innerHTML = `${label} flashed successfully!<br><small>If your program didn't start automatically,<br>press the <b>RESET</b> button.</small>`;
+    statusDiv.innerHTML = successMessage
+      ?? `${label} flashed successfully!<br><small>If your program didn't start automatically,<br>press the <b>RESET</b> button.</small>`;
     setTimeout(hideProgress, 3000);
   } catch (e) {
     hideProgress();
@@ -368,8 +369,12 @@ programFlashBtn?.addEventListener('click', async () => {
       statusDiv.textContent = 'Failed to load program binary.';
       return;
     }
-    // Bare-metal: no otadata clearing — programs carry their own simple partition table
-    await performFlash(programEntries, label, { clearOtadata: false });
+    // clearOtadata from manifest: OTA-partition programs (e.g. MicroPython) set this
+    // true so the factory partition boots instead of a stale OTA slot.
+    await performFlash(programEntries, label, {
+      clearOtadata: !!entry.clearOtadata,
+      successMessage: entry.successMessage ?? null,
+    });
   } catch (e) {
     const msg = e.message || String(e);
     statusDiv.textContent = 'Flash error: ' + msg;

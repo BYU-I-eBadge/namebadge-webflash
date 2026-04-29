@@ -85,6 +85,22 @@ The script will:
 }
 ```
 
+### OTA-partition apps (factory at 0x20000)
+
+If your app uses an OTA-capable partition table (factory partition at `0x20000` instead of `0x10000`), add `"clearOtadata": true` to the manifest entry. This tells the flasher to wipe the OTA boot selector so the factory partition starts instead of a stale OTA slot.
+
+```json
+{
+  "name": "My OTA App",
+  "clearOtadata": true,
+  "binaries": [
+    { "url": "https://byu-i-ebadge.github.io/apps/my_app_bl.bin",  "address": 4096 },
+    { "url": "https://byu-i-ebadge.github.io/apps/my_app_pt.bin",  "address": 32768 },
+    { "url": "https://byu-i-ebadge.github.io/apps/my_app.bin",     "address": 131072 }
+  ]
+}
+```
+
 ---
 
 ## Publishing a Badge OS (Bootloader) Release
