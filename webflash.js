@@ -190,8 +190,13 @@ sudo udevadm control --reload-rules
 //
 // Returns [{binary: ArrayBuffer, address: number}, ...]
 async function fetchEntriesBinaries(manifestEntry, label) {
+  // binaries[]  — new multi-region format
+  // binary_url  — legacy bootloader manifest (single binary, goes at 0x20000)
+  // url         — legacy program manifest    (single binary, goes at 0x10000)
   const sources = manifestEntry.binaries
-    ?? [{ url: manifestEntry.binary_url, address: manifestEntry.address ?? 0x20000 }];
+    ?? (manifestEntry.binary_url
+        ? [{ url: manifestEntry.binary_url, address: manifestEntry.address ?? 0x20000 }]
+        : [{ url: manifestEntry.url,        address: manifestEntry.address ?? 0x10000 }]);
 
   statusDiv.textContent = `Downloading ${label}...`;
   const entries = [];
