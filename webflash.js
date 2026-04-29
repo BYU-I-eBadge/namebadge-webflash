@@ -135,7 +135,8 @@ sudo systemctl stop ModemManager
 sudo tee /etc/udev/rules.d/99-no-brltty-cp210x.rules &lt;&lt;'EOF'
 ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ENV{ID_BRLTTY_DEVICE_IGNORE}="1"
 EOF
-sudo udevadm control --reload-rules</pre>`,
+sudo udevadm control --reload-rules
+# Then unplug and replug the badge — the rules only apply to new connections</pre>`,
     windows: `<b>Windows troubleshooting:</b><ul style="margin:0.5em 0 0 0">
 <li>Install the <a href="https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers" target="_blank">CP210x USB driver from Silicon Labs</a> if the port doesn't appear.</li>
 <li>Select the correct COM port in the picker (look for "CP2102N").</li>
@@ -169,7 +170,8 @@ sudo systemctl stop ModemManager
 sudo tee /etc/udev/rules.d/99-no-brltty-cp210x.rules &lt;&lt;'EOF'
 ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ENV{ID_BRLTTY_DEVICE_IGNORE}="1"
 EOF
-sudo udevadm control --reload-rules</pre>`;
+sudo udevadm control --reload-rules
+# Then unplug and replug the badge — the rules only apply to new connections</pre>`;
   troubleshootDiv.style.display = '';
 }
 
