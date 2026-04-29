@@ -179,7 +179,10 @@ async function performFlash(binary, label, { eraseUserData = false } = {}) {
   const terminal = {
     clean() {},
     writeLine(data) { if (!flashing) statusDiv.textContent = data; console.log('[ESP]', data); },
-    write(data)     { if (!flashing) statusDiv.textContent = data; },
+    write(data)     {
+      if (!flashing) statusDiv.textContent = data;
+      if (data && data.trim()) console.log('[TRACE]', JSON.stringify(data));
+    },
   };
 
   let transport = null;
@@ -187,11 +190,17 @@ async function performFlash(binary, label, { eraseUserData = false } = {}) {
   try {
     statusDiv.textContent = 'Select the serial port for your badge...';
     const port = await navigator.serial.requestPort();
-    transport = new Transport(port, false);
+    const info = port.getInfo?.() ?? {};
+    console.log('[DEBUG] Port selected:', JSON.stringify(info));
 
+    console.log('[DEBUG] Creating transport (tracing enabled)...');
+    transport = new Transport(port, true);
+
+    console.log('[DEBUG] Creating ESPLoader (baudrate=460800)...');
     const esploader = new ESPLoader({ transport, baudrate: 460800, terminal });
 
     statusDiv.textContent = 'Connecting to chip...';
+    console.log('[DEBUG] Calling esploader.main() — waiting for chip sync...');
 
     // If sync takes more than 8 s, prompt the user to enter download mode
     resetPromptTimer = setTimeout(() => {
@@ -247,6 +256,8 @@ async function performFlash(binary, label, { eraseUserData = false } = {}) {
     hideProgress();
     clearTimeout(resetPromptTimer);
     resetPrompt.style.display = 'none';
+    console.log('[DEBUG] performFlash caught error:', e);
+    console.log('[DEBUG] error.name:', e?.name, 'error.message:', e?.message, 'error.cause:', e?.cause);
     throw e;
   } finally {
     if (transport) {
