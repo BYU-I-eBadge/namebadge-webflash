@@ -7,7 +7,7 @@ if (window.__NB_WEBFLASH_LOADED__) {
 window.__NB_WEBFLASH_LOADED__ = true;
 
 
-const manifestUrl = 'https://byu-i-ebadge.github.io/apps/loader_manifest.json';
+const manifestUrl = 'https://byu-i-ebadge.github.io/bootloader_downloads/loader_manifest.json';
 const programManifestUrl = 'https://byu-i-ebadge.github.io/apps/manifest.json';
 
 // Badge OS (OTA) flash layout — partitions.csv in BYUI-Namebadge4-OTA:
@@ -167,19 +167,6 @@ sudo udevadm control --reload-rules
 function hideTroubleshoot() {
   troubleshootDiv.style.display = 'none';
   troubleshootDiv.innerHTML = '';
-}
-
-function showLinuxSetupNote() {
-  if (getOS() !== 'linux') return;
-  troubleshootDiv.innerHTML = `<b>Linux setup required before flashing</b> — on Ubuntu 22.04+, <code>brltty</code> (a Braille accessibility daemon) automatically claims the CP210x chip and blocks the browser from connecting. Run these commands in a terminal, then unplug and replug the badge:
-<pre style="background:#f5f5f5;padding:0.7em;border-radius:6px;overflow-x:auto;font-size:0.9em;">sudo usermod -aG dialout $USER   # then log out and back in
-sudo systemctl stop ModemManager
-sudo tee /etc/udev/rules.d/99-no-brltty-cp210x.rules &lt;&lt;'EOF'
-ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ENV{ID_BRLTTY_DEVICE_IGNORE}="1"
-EOF
-sudo udevadm control --reload-rules
-# Then unplug and replug the badge — the rules only apply to new connections</pre>`;
-  troubleshootDiv.style.display = '';
 }
 
 
@@ -404,7 +391,6 @@ function showBrowserStatus() {
     statusDiv.textContent = `Good -- Your Browser (${browserName}) can be used to flash your board.`;
     bootloaderSelect.disabled = false;
     flashBtn.disabled = false;
-    showLinuxSetupNote();
     fetchManifest();
     fetchProgramManifest();
   } else {
