@@ -315,7 +315,9 @@ async function fetchProgramManifest() {
     }
     populateProgramDropdown();
     programSelect.disabled = false;
-    programFlashBtn.disabled = false;
+    if (programList.length > 0) {
+      await fetchProgramEntries(programList[0]);
+    }
   } catch (e) {
     programSelect.innerHTML = '<option>Error loading programs</option>';
     programSelect.disabled = true;
