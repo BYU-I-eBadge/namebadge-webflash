@@ -36,6 +36,7 @@ const progressWrap   = document.getElementById('progressWrap');
 const progressFill   = document.getElementById('progressFill');
 const progressLabel  = document.getElementById('progressLabel');
 const resetPrompt    = document.getElementById('resetPrompt');
+const troubleshootDiv = document.getElementById('troubleshoot');
 const bootloaderSelect = document.getElementById('bootloaderSelect');
 const flashBtn       = document.getElementById('flashBtn');
 const programSelect  = document.getElementById('programSelect');
@@ -117,7 +118,63 @@ function getBrowserName() {
 }
 
 
+function getOS() {
+  const ua = navigator.userAgent;
+  if (ua.includes('Windows')) return 'windows';
+  if (ua.includes('Mac'))     return 'mac';
+  if (ua.includes('Linux'))   return 'linux';
+  return 'unknown';
+}
+
+function showConnectionTroubleshoot() {
+  const os = getOS();
+  const tips = {
+    linux: `<b>Linux setup required</b> — run these commands in a terminal, then unplug and replug the badge:
+<pre style="background:#f5f5f5;padding:0.7em;border-radius:6px;overflow-x:auto;font-size:0.9em;">sudo usermod -aG dialout $USER   # then log out and back in
+sudo systemctl stop ModemManager
+sudo tee /etc/udev/rules.d/99-no-brltty-cp210x.rules &lt;&lt;'EOF'
+ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ENV{ID_BRLTTY_DEVICE_IGNORE}="1"
+EOF
+sudo udevadm control --reload-rules</pre>`,
+    windows: `<b>Windows troubleshooting:</b><ul style="margin:0.5em 0 0 0">
+<li>Install the <a href="https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers" target="_blank">CP210x USB driver from Silicon Labs</a> if the port doesn't appear.</li>
+<li>Select the correct COM port in the picker (look for "CP2102N").</li>
+<li>Try a different USB cable — charge-only cables won't work.</li>
+</ul>`,
+    mac: `<b>Mac troubleshooting:</b><ul style="margin:0.5em 0 0 0">
+<li>Try a different USB cable — charge-only cables won't work.</li>
+<li>If no port appears, install the <a href="https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers" target="_blank">CP210x driver from Silicon Labs</a>.</li>
+<li>If macOS blocks the driver, go to System Settings &rarr; Privacy &amp; Security and allow it.</li>
+</ul>`,
+    unknown: `<b>Troubleshooting:</b><ul style="margin:0.5em 0 0 0">
+<li>Try a different USB cable — charge-only cables won't work.</li>
+<li>Make sure you selected the CP2102N port in the picker.</li>
+</ul>`,
+  };
+  const common = `<p style="margin:0.8em 0 0 0">Also try entering download mode <em>before</em> clicking Flash: hold <b>BOOT</b> &rarr; press &amp; release <b>RESET</b> &rarr; release <b>BOOT</b>.</p>`;
+  troubleshootDiv.innerHTML = (tips[os] ?? tips.unknown) + common;
+  troubleshootDiv.style.display = '';
+}
+
+function hideTroubleshoot() {
+  troubleshootDiv.style.display = 'none';
+  troubleshootDiv.innerHTML = '';
+}
+
+function showLinuxSetupNote() {
+  if (getOS() !== 'linux') return;
+  troubleshootDiv.innerHTML = `<b>Linux setup required before flashing</b> — on Ubuntu 22.04+, <code>brltty</code> (a Braille accessibility daemon) automatically claims the CP210x chip and blocks the browser from connecting. Run these commands in a terminal, then unplug and replug the badge:
+<pre style="background:#f5f5f5;padding:0.7em;border-radius:6px;overflow-x:auto;font-size:0.9em;">sudo usermod -aG dialout $USER   # then log out and back in
+sudo systemctl stop ModemManager
+sudo tee /etc/udev/rules.d/99-no-brltty-cp210x.rules &lt;&lt;'EOF'
+ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ENV{ID_BRLTTY_DEVICE_IGNORE}="1"
+EOF
+sudo udevadm control --reload-rules</pre>`;
+  troubleshootDiv.style.display = '';
+}
+
 async function performFlash(binary, label, { eraseUserData = false } = {}) {
+  hideTroubleshoot();
   let flashing = false;
   const terminal = {
     clean() {},
@@ -277,8 +334,10 @@ programFlashBtn?.addEventListener('click', async () => {
     }
     await performFlash(programBinary, label);
   } catch (e) {
-    statusDiv.textContent = 'Flash error: ' + (e.message || e);
+    const msg = e.message || String(e);
+    statusDiv.textContent = 'Flash error: ' + msg;
     console.error('[Flash error]', e);
+    if (/connect|device|lost|serial/i.test(msg)) showConnectionTroubleshoot();
   } finally {
     programFlashBtn.disabled = false;
     flashBtn.disabled = false;
@@ -296,6 +355,7 @@ function showBrowserStatus() {
     statusDiv.textContent = `Good -- Your Browser (${browserName}) can be used to flash your board.`;
     bootloaderSelect.disabled = false;
     flashBtn.disabled = false;
+    showLinuxSetupNote();
     fetchManifest();
     fetchProgramManifest();
   } else {
@@ -373,8 +433,10 @@ flashBtn.addEventListener('click', async () => {
   try {
     await performFlash(bootloaderBinary, label, { eraseUserData: !keepUserDataCheckbox.checked });
   } catch (e) {
-    statusDiv.textContent = 'Flash error: ' + (e.message || e);
+    const msg = e.message || String(e);
+    statusDiv.textContent = 'Flash error: ' + msg;
     console.error('[Flash error]', e);
+    if (/connect|device|lost|serial/i.test(msg)) showConnectionTroubleshoot();
   } finally {
     flashBtn.disabled = false;
     programFlashBtn.disabled = false;
