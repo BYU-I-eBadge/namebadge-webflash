@@ -251,8 +251,11 @@ async function performFlash(fileEntries, label, { eraseUserData = false, clearOt
       fileArray.push({ data: new Uint8Array(USER_DATA_SIZE).fill(0xFF), address: USER_DATA_ADDR });
     }
 
-    const totalFlashBytes = fileEntries.reduce((sum, e) => sum + e.binary.byteLength, 0);
-    const bytesPerFile = new Array(fileEntries.length).fill(0);
+    const fileSizes = fileEntries.map(e => e.binary.byteLength);
+    const totalFlashBytes = fileSizes.reduce((a, b) => a + b, 0);
+    // completedBytes[i] tracks scaled progress for file i: we scale compressed
+    // written/total back to the original file size so the bar shows 0-100%.
+    const completedBytes = new Array(fileEntries.length).fill(0);
 
     flashing = true;
     setProgress(0, 'Starting...');
@@ -265,12 +268,14 @@ async function performFlash(fileEntries, label, { eraseUserData = false, clearOt
       compress: true,
       reportProgress: (fileIndex, written, total) => {
         console.log('[PROGRESS]', fileIndex, written, total);
-        if (fileIndex < bytesPerFile.length) bytesPerFile[fileIndex] = written;
-        const totalWritten = bytesPerFile.reduce((a, b) => a + b, 0);
+        if (fileIndex < completedBytes.length && total > 0) {
+          completedBytes[fileIndex] = fileSizes[fileIndex] * (written / total);
+        }
+        const totalWritten = completedBytes.reduce((a, b) => a + b, 0);
         const pct = Math.min(100, Math.round(totalWritten / totalFlashBytes * 100));
         const filled = Math.round(pct / 5);
         statusDiv.textContent = `[${'█'.repeat(filled)}${'░'.repeat(20 - filled)}] ${pct}%`;
-        setProgress(pct, `${totalWritten.toLocaleString()} / ${totalFlashBytes.toLocaleString()} bytes`);
+        setProgress(pct, `${Math.round(totalWritten).toLocaleString()} / ${totalFlashBytes.toLocaleString()} bytes`);
       },
     });
 

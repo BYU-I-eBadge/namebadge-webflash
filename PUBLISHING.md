@@ -111,7 +111,7 @@ The badge OS is the OTA-capable loader that lives in the factory partition. It r
 
 | Region             | Address   | Source file                              |
 |--------------------|-----------|------------------------------------------|
-| Custom bootloader  | `0x1000`  | `build/bootloader/bootloader.bin`        |
+| Custom bootloader  | `0x0`     | `build/bootloader/bootloader.bin`        |
 | OTA partition table| `0x8000`  | `build/partition_table/partition-table.bin` |
 | Badge OS factory app | `0x20000` | `build/ebadge_app.bin`               |
 
