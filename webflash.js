@@ -10,40 +10,47 @@ window.__NB_WEBFLASH_LOADED__ = true;
 const manifestUrl = 'https://byu-i-ebadge.github.io/apps/loader_manifest.json';
 const programManifestUrl = 'https://byu-i-ebadge.github.io/apps/manifest.json';
 
-// Flash layout (from partitions.csv):
-//   0x1000  second-stage bootloader (factory_switch hook)
-//   0x8000  partition table
-//   0xF000  otadata  – OTA boot selector, 2 × 4 KB sectors
-//   0x20000 factory  – badge loader OS or bare-metal app (1.25 MB)
+// Badge OS (OTA) flash layout — partitions.csv in BYUI-Namebadge4-OTA:
+//   0x1000   second-stage bootloader (factory_switch hook)
+//   0x8000   partition table
+//   0xF000   otadata  – OTA boot selector, 2 × 4 KB sectors
+//   0x20000  factory  – badge loader OS (1.25 MB)
 //   0x160000 ota_0   – student app slot A
 //   0x2A0000 ota_1   – student app slot B
-//   0x3E0000 user_data – WiFi config / badge nickname (never touched here)
-const FACTORY_ADDR    = 0x20000;
-const OTADATA_ADDR    = 0xF000;
-const OTADATA_SIZE    = 0x2000;   // 8 KB (2 × 4 KB sectors)
-const USER_DATA_ADDR  = 0x3E0000;
-const USER_DATA_SIZE  = 0x20000;  // 128 KB (4 MB flash end − 0x3E0000)
+//   0x3E0000 user_data – WiFi config / badge nickname
+//
+// Bare-metal single-program layout — partitions.csv in each program repo:
+//   0x1000   second-stage bootloader
+//   0x8000   partition table (simple, no OTA)
+//   0x10000  factory app (fills remaining flash)
+//
+// Both layouts are fully described by the manifest's binaries[] array.
+// The web flasher writes exactly what the manifest says; no hardcoded addresses.
+const OTADATA_ADDR   = 0xF000;
+const OTADATA_SIZE   = 0x2000;   // 8 KB (2 × 4 KB sectors)
+const USER_DATA_ADDR = 0x3E0000;
+const USER_DATA_SIZE = 0x20000;  // 128 KB
 
 let bootloaderList = [];
-let bootloaderBinary = null;
+let bootloaderEntries = null;  // [{binary: ArrayBuffer, address: number}, ...]
 let programList = [];
-let programBinary = null;
+let programEntries = null;     // [{binary: ArrayBuffer, address: number}, ...]
 
 
 const keepUserDataCheckbox = document.getElementById('keepUserData');
-const statusDiv      = document.getElementById('status');
-const progressWrap   = document.getElementById('progressWrap');
-const progressFill   = document.getElementById('progressFill');
-const progressLabel  = document.getElementById('progressLabel');
-const resetPrompt    = document.getElementById('resetPrompt');
+const statusDiv       = document.getElementById('status');
+const progressWrap    = document.getElementById('progressWrap');
+const progressFill    = document.getElementById('progressFill');
+const progressLabel   = document.getElementById('progressLabel');
+const resetPrompt     = document.getElementById('resetPrompt');
 const troubleshootDiv = document.getElementById('troubleshoot');
 const bootloaderSelect = document.getElementById('bootloaderSelect');
-const flashBtn       = document.getElementById('flashBtn');
-const programSelect  = document.getElementById('programSelect');
+const flashBtn        = document.getElementById('flashBtn');
+const programSelect   = document.getElementById('programSelect');
 const programFlashBtn = document.getElementById('programFlashBtn');
-const mainContent    = document.getElementById('mainContent');
-const unsupportedMsg = document.getElementById('unsupportedMsg');
-const browserNameMsg = document.getElementById('browserNameMsg');
+const mainContent     = document.getElementById('mainContent');
+const unsupportedMsg  = document.getElementById('unsupportedMsg');
+const browserNameMsg  = document.getElementById('browserNameMsg');
 
 function setProgress(pct, label) {
   progressWrap.style.display = '';
@@ -175,13 +182,38 @@ sudo udevadm control --reload-rules
   troubleshootDiv.style.display = '';
 }
 
-async function performFlash(binary, label, { eraseUserData = false } = {}) {
+
+// Fetch all binaries described by a manifest entry.
+//
+// New format:  entry.binaries = [{url, address}, ...]  — one fetch per region
+// Legacy format: entry.binary_url + optional entry.address  — single binary
+//
+// Returns [{binary: ArrayBuffer, address: number}, ...]
+async function fetchEntriesBinaries(manifestEntry, label) {
+  const sources = manifestEntry.binaries
+    ?? [{ url: manifestEntry.binary_url, address: manifestEntry.address ?? 0x20000 }];
+
+  statusDiv.textContent = `Downloading ${label}...`;
+  const entries = [];
+  for (const src of sources) {
+    const resp = await fetch(src.url);
+    if (!resp.ok) throw new Error(`Failed to fetch ${src.url}`);
+    entries.push({ binary: await resp.arrayBuffer(), address: src.address });
+  }
+  return entries;
+}
+
+
+// fileEntries:  [{binary: ArrayBuffer, address: number}, ...]
+// clearOtadata: true for badge OS flash — clears OTA selector so factory boots
+//               false for bare-metal programs — they have their own partition table
+async function performFlash(fileEntries, label, { eraseUserData = false, clearOtadata = false } = {}) {
   hideTroubleshoot();
   let flashing = false;
   const terminal = {
     clean() {},
     writeLine(data) { if (!flashing) statusDiv.textContent = data; console.log('[ESP]', data); },
-    write(data)     {
+    write(data) {
       if (!flashing) statusDiv.textContent = data;
       if (data && data.trim()) console.log('[TRACE]', JSON.stringify(data));
     },
@@ -206,22 +238,19 @@ async function performFlash(binary, label, { eraseUserData = false } = {}) {
     console.log('[DEBUG] Calling esploader.main() — waiting for chip sync...');
 
     const chipName = await esploader.main();
-    clearTimeout(resetPromptTimer);
     resetPrompt.style.display = 'none';
     statusDiv.textContent = `Connected to ${chipName}. Starting flash...`;
 
-    // Clear otadata so the device boots the newly flashed factory image immediately,
-    // rather than resuming a previously installed OTA student app.
-    const blankOtadata   = new Uint8Array(OTADATA_SIZE).fill(0xFF);
-    const blankUserData  = new Uint8Array(USER_DATA_SIZE).fill(0xFF);
-
-    const fileArray = [
-      { data: new Uint8Array(binary), address: FACTORY_ADDR },
-      { data: blankOtadata,           address: OTADATA_ADDR },
-    ];
-    if (eraseUserData) {
-      fileArray.push({ data: blankUserData, address: USER_DATA_ADDR });
+    const fileArray = fileEntries.map(e => ({ data: new Uint8Array(e.binary), address: e.address }));
+    if (clearOtadata) {
+      fileArray.push({ data: new Uint8Array(OTADATA_SIZE).fill(0xFF), address: OTADATA_ADDR });
     }
+    if (eraseUserData) {
+      fileArray.push({ data: new Uint8Array(USER_DATA_SIZE).fill(0xFF), address: USER_DATA_ADDR });
+    }
+
+    const totalFlashBytes = fileEntries.reduce((sum, e) => sum + e.binary.byteLength, 0);
+    const bytesPerFile = new Array(fileEntries.length).fill(0);
 
     flashing = true;
     setProgress(0, 'Starting...');
@@ -234,12 +263,10 @@ async function performFlash(binary, label, { eraseUserData = false } = {}) {
       compress: true,
       reportProgress: (fileIndex, written, total) => {
         console.log('[PROGRESS]', fileIndex, written, total);
-        if (!total || fileIndex > 0) return; // only track the main binary (index 0)
-        const pct = Math.min(100, Math.round((written / total) * 100));
-        const filled = Math.round(pct / 5);  // 20 chars wide
-        const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
-        statusDiv.textContent = `[${bar}] ${pct}%`;
-        setProgress(pct, `${written.toLocaleString()} / ${total.toLocaleString()} bytes`);
+        if (fileIndex < bytesPerFile.length) bytesPerFile[fileIndex] = written;
+        const totalWritten = bytesPerFile.reduce((a, b) => a + b, 0);
+        const pct = Math.min(100, Math.round(totalWritten / totalFlashBytes * 100));
+        setProgress(pct, `${totalWritten.toLocaleString()} / ${totalFlashBytes.toLocaleString()} bytes`);
       },
     });
 
@@ -262,6 +289,8 @@ async function performFlash(binary, label, { eraseUserData = false } = {}) {
   }
 }
 
+
+// === Single Program Flash ===
 
 async function fetchProgramManifest() {
   if (!programSelect) return;
@@ -295,34 +324,30 @@ function populateProgramDropdown() {
   programList.forEach((entry, idx) => {
     const opt = document.createElement('option');
     opt.value = idx;
-    opt.textContent = entry.name || entry.title || entry.url || `Program ${idx + 1}`;
+    opt.textContent = entry.name || entry.title || `Program ${idx + 1}`;
     if (idx === 0) opt.selected = true;
     programSelect.appendChild(opt);
   });
 }
 
-async function fetchProgramBinary(url) {
-  statusDiv.textContent = 'Downloading program binary...';
+async function fetchProgramEntries(entry) {
   programFlashBtn.disabled = true;
+  programEntries = null;
   try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('Failed to fetch program binary');
-    programBinary = await resp.arrayBuffer();
-    statusDiv.textContent = `Ready to flash program (${programBinary.byteLength} bytes)`;
+    programEntries = await fetchEntriesBinaries(entry, entry.name || 'program');
+    const totalBytes = programEntries.reduce((sum, e) => sum + e.binary.byteLength, 0);
+    statusDiv.textContent = `Ready to flash ${entry.name || 'program'} (${totalBytes.toLocaleString()} bytes)`;
     programFlashBtn.disabled = false;
   } catch (e) {
     statusDiv.textContent = 'Error downloading program: ' + e;
-    programBinary = null;
+    programEntries = null;
     programFlashBtn.disabled = true;
   }
 }
 
 programSelect?.addEventListener('change', async () => {
   const idx = parseInt(programSelect.value, 10);
-  const entry = programList[idx];
-  if (entry && entry.url) {
-    await fetchProgramBinary(entry.url);
-  }
+  await fetchProgramEntries(programList[idx]);
 });
 
 programFlashBtn?.addEventListener('click', async () => {
@@ -332,14 +357,13 @@ programFlashBtn?.addEventListener('click', async () => {
   programFlashBtn.disabled = true;
   flashBtn.disabled = true;
   try {
-    if (!programBinary && entry?.url) {
-      await fetchProgramBinary(entry.url);
-    }
-    if (!programBinary) {
+    if (!programEntries) await fetchProgramEntries(entry);
+    if (!programEntries) {
       statusDiv.textContent = 'Failed to load program binary.';
       return;
     }
-    await performFlash(programBinary, label);
+    // Bare-metal: no otadata clearing — programs carry their own simple partition table
+    await performFlash(programEntries, label, { clearOtadata: false });
   } catch (e) {
     const msg = e.message || String(e);
     statusDiv.textContent = 'Flash error: ' + msg;
@@ -351,6 +375,8 @@ programFlashBtn?.addEventListener('click', async () => {
   }
 });
 
+
+// === Bootloader Flash ===
 
 function showBrowserStatus() {
   console.log('[DEBUG] showBrowserStatus() called');
@@ -386,7 +412,7 @@ async function fetchManifest() {
     populateBootloaderDropdown();
     bootloaderSelect.disabled = false;
     flashBtn.disabled = false;
-    await fetchBootloaderBinary(bootloaderList[0].binary_url);
+    await fetchBootloaderEntries(bootloaderList[0]);
   } catch (e) {
     console.log('[DEBUG] Error in fetchManifest:', e);
     statusDiv.textContent = 'Error fetching manifest: ' + e;
@@ -406,30 +432,28 @@ function populateBootloaderDropdown() {
   });
 }
 
-async function fetchBootloaderBinary(url) {
-  statusDiv.textContent = 'Downloading bootloader binary...';
+async function fetchBootloaderEntries(entry) {
   flashBtn.disabled = true;
+  bootloaderEntries = null;
   try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('Failed to fetch bootloader binary');
-    bootloaderBinary = await resp.arrayBuffer();
-    statusDiv.textContent = `Ready to flash bootloader (${bootloaderBinary.byteLength} bytes)`;
+    bootloaderEntries = await fetchEntriesBinaries(entry, `bootloader v${entry.loader_version}`);
+    const totalBytes = bootloaderEntries.reduce((sum, e) => sum + e.binary.byteLength, 0);
+    statusDiv.textContent = `Ready to flash bootloader v${entry.loader_version} (${totalBytes.toLocaleString()} bytes)`;
     flashBtn.disabled = false;
   } catch (e) {
     statusDiv.textContent = 'Error downloading bootloader: ' + e;
-    bootloaderBinary = null;
+    bootloaderEntries = null;
     flashBtn.disabled = true;
   }
 }
 
 bootloaderSelect.addEventListener('change', async () => {
   const idx = parseInt(bootloaderSelect.value, 10);
-  const entry = bootloaderList[idx];
-  await fetchBootloaderBinary(entry.binary_url);
+  await fetchBootloaderEntries(bootloaderList[idx]);
 });
 
 flashBtn.addEventListener('click', async () => {
-  if (!bootloaderBinary) {
+  if (!bootloaderEntries) {
     statusDiv.textContent = 'Bootloader not loaded. Select a version above.';
     return;
   }
@@ -438,7 +462,11 @@ flashBtn.addEventListener('click', async () => {
   flashBtn.disabled = true;
   programFlashBtn.disabled = true;
   try {
-    await performFlash(bootloaderBinary, label, { eraseUserData: !keepUserDataCheckbox.checked });
+    // Badge OS: clear otadata to force factory boot instead of resuming an OTA slot
+    await performFlash(bootloaderEntries, label, {
+      clearOtadata: true,
+      eraseUserData: !keepUserDataCheckbox.checked,
+    });
   } catch (e) {
     const msg = e.message || String(e);
     statusDiv.textContent = 'Flash error: ' + msg;
