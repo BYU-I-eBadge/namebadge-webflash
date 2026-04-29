@@ -217,11 +217,8 @@ async function performFlash(fileEntries, label, { eraseUserData = false, clearOt
   let flashing = false;
   const terminal = {
     clean() {},
-    writeLine(data) { if (!flashing) statusDiv.textContent = data; console.log('[ESP]', data); },
-    write(data) {
-      if (!flashing) statusDiv.textContent = data;
-      if (data && data.trim()) console.log('[TRACE]', JSON.stringify(data));
-    },
+    writeLine(data) { console.log('[ESP]', data); },
+    write(data)     { if (data && data.trim()) console.log('[TRACE]', JSON.stringify(data)); },
   };
 
   let transport = null;
@@ -271,6 +268,8 @@ async function performFlash(fileEntries, label, { eraseUserData = false, clearOt
         if (fileIndex < bytesPerFile.length) bytesPerFile[fileIndex] = written;
         const totalWritten = bytesPerFile.reduce((a, b) => a + b, 0);
         const pct = Math.min(100, Math.round(totalWritten / totalFlashBytes * 100));
+        const filled = Math.round(pct / 5);
+        statusDiv.textContent = `[${'█'.repeat(filled)}${'░'.repeat(20 - filled)}] ${pct}%`;
         setProgress(pct, `${totalWritten.toLocaleString()} / ${totalFlashBytes.toLocaleString()} bytes`);
       },
     });
