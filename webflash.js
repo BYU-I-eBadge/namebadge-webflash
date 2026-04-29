@@ -278,7 +278,7 @@ async function performFlash(fileEntries, label, { eraseUserData = false, clearOt
     resetPrompt.style.display = 'none';
     statusDiv.textContent = 'Flashing done. Resetting device...';
     await esploader.after('hard_reset');
-    statusDiv.innerHTML = `${label} flashed successfully!<br><small>If your program didn't start automatically, press the <b>RESET</b> button.</small>`;
+    statusDiv.innerHTML = `${label} flashed successfully!<br><small>If your program didn't start automatically,<br>press the <b>RESET</b> button.</small>`;
     setTimeout(hideProgress, 3000);
   } catch (e) {
     hideProgress();
