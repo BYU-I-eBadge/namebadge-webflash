@@ -44,6 +44,7 @@ function getProgramPriority(entry) {
   const name = String(entry?.name || entry?.title || '').trim().toLowerCase();
   if (name === 'friends around me') return 0;
   if (name === 'micropython') return 1;
+  if (name === 'power-on demos') return 99;
   return 2;
 }
 
