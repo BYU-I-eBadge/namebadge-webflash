@@ -40,6 +40,23 @@ let bootloaderEntries = null;  // [{binary: ArrayBuffer, address: number}, ...]
 let programList = [];
 let programEntries = null;     // [{binary: ArrayBuffer, address: number}, ...]
 
+function getProgramPriority(entry) {
+  const name = String(entry?.name || entry?.title || '').trim().toLowerCase();
+  if (name === 'friends around me') return 0;
+  if (name === 'micropython') return 1;
+  return 2;
+}
+
+function applyProgramOrdering(list) {
+  return list
+    .map((entry, idx) => ({ entry, idx }))
+    .sort((a, b) => {
+      const rankDiff = getProgramPriority(a.entry) - getProgramPriority(b.entry);
+      return rankDiff !== 0 ? rankDiff : a.idx - b.idx;
+    })
+    .map(item => item.entry);
+}
+
 
 const keepUserDataCheckbox = document.getElementById('keepUserData');
 const statusDiv       = document.getElementById('status');
@@ -311,6 +328,7 @@ async function fetchProgramManifest() {
     } else {
       programList = [];
     }
+    programList = applyProgramOrdering(programList);
     populateProgramDropdown();
     programSelect.disabled = false;
     if (programList.length > 0) {
