@@ -319,7 +319,7 @@ async function fetchProgramManifest() {
   programSelect.disabled = true;
   programFlashBtn.disabled = true;
   try {
-    const resp = await fetch(programManifestUrl);
+    const resp = await fetch(programManifestUrl + '?v=' + Date.now());
     if (!resp.ok) throw new Error('Failed to fetch program manifest');
     const manifest = await resp.json();
     if (Array.isArray(manifest)) {
@@ -431,7 +431,7 @@ function showBrowserStatus() {
 async function fetchManifest() {
   statusDiv.textContent = 'Fetching manifest...';
   try {
-    const resp = await fetch(manifestUrl);
+    const resp = await fetch(manifestUrl + '?v=' + Date.now());
     if (!resp.ok) throw new Error('Failed to fetch manifest');
     let manifest = await resp.json();
     manifest = manifest.slice().reverse();
